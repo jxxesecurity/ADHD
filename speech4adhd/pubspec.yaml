@@ -1,0 +1,33 @@
+name: speech4adhd
+description: "Fun app helping kids with ADHD (ages 6–14) practice communication skills: short talking prompts, quick debates, record & listen back, rewards & gamification."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  go_router: ^14.2.0
+  flutter_sound: ^9.30.0
+  speech_to_text: ^7.3.0
+  flutter_tts: ^4.2.5
+  permission_handler: ^11.3.0
+  shared_preferences: ^2.3.0
+  lottie: ^3.1.2
+  confetti: ^0.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  # assets:
+  #   - assets/lottie/
+  #   - assets/images/
