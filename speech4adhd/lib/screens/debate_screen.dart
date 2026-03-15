@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../constants/colors.dart';
 import '../constants/prompts.dart';
@@ -58,9 +59,17 @@ class _DebateScreenState extends State<DebateScreen> {
     final granted = await PermissionService.requestMicrophone();
     if (!granted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Microphone permission is needed to record. Enable it in Settings.'),
+        SnackBar(
+          content: const Text(
+            'Microphone is off. Tap "Open Settings" and turn on Microphone for this app.',
+          ),
           behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Open Settings',
+            onPressed: () async {
+              await openAppSettings();
+            },
+          ),
         ),
       );
       return;

@@ -6,6 +6,8 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Speech4ADHD uses the microphone so you can record your voice and practice talking. Your recordings stay on your device.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Speech4adhd</string>
 	<key>CFBundleExecutable</key>
@@ -49,8 +51,6 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Speech4ADHD uses the microphone so you can record your voice and practice talking. Your recordings stay on your device.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech4ADHD uses speech recognition to show what you said on screen. This helps you see your words and get positive feedback.</string>
 	<key>UILaunchStoryboardName</key>

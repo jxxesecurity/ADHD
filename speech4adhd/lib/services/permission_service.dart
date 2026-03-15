@@ -19,4 +19,9 @@ class PermissionService {
   static Future<bool> get hasMicrophone async {
     return (await Permission.microphone.status).isGranted;
   }
+
+  /// Opens the app's Settings page so the user can enable Microphone.
+  static Future<void> openSettings() async {
+    await openAppSettings();
+  }
 }
