@@ -1,7 +1,8 @@
-import 'dart:math';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:flutter_sound/flutter_sound.dart';
@@ -26,12 +27,13 @@ class _TalkScreenState extends State<TalkScreen> {
   bool _showFeedback = false;
   bool _isPlaying = false;
   String? _recordedFilePath;
+  String? _recordingPath;
   final _random = Random();
 
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   final FlutterSoundPlayer _player = FlutterSoundPlayer();
 
-  static const Codec _codec = Codec.aacMP4;
+  static const Codec _codec = Codec.aacADTS;
 
   @override
   void initState() {
@@ -72,9 +74,9 @@ class _TalkScreenState extends State<TalkScreen> {
     if (_isRecording) {
       setState(() => _isRecording = false);
       try {
-        final path = await _recorder.stopRecorder();
+        await _recorder.stopRecorder();
+        final path = _recordingPath;
         if (mounted && path != null && path.isNotEmpty) {
-          // Keep the raw path returned by flutter_sound; use it directly for playback.
           setState(() {
             _recordedFilePath = path;
             _hasPlayedBack = false;
@@ -111,10 +113,13 @@ class _TalkScreenState extends State<TalkScreen> {
     }
 
     try {
-      // Let flutter_sound manage the storage location; we just give it a file name.
-      const fileName = 'speech4adhd_talk.mp4';
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/speech4adhd_talk_${DateTime.now().millisecondsSinceEpoch}.aac';
+      _recordingPath = path;
+
       await _recorder.startRecorder(
-        toFile: fileName,
+        toFile: path,
         codec: _codec,
         sampleRate: 44100,
         numChannels: 1,
@@ -133,9 +138,7 @@ class _TalkScreenState extends State<TalkScreen> {
     final path = _recordedFilePath;
     if (path == null || path.isEmpty) return;
 
-    // Some platforms may return a file URI like file://...; normalize to a real path for File().
-    final normalizedPath = path.startsWith('file://') ? path.substring(7) : path;
-    final file = File(normalizedPath);
+    final file = File(path);
     if (!await file.exists()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -153,8 +156,11 @@ class _TalkScreenState extends State<TalkScreen> {
 
     try {
       setState(() => _isPlaying = true);
+      // Workaround for iOS/Android: fromURI can fail with local file path;
+      // playing from buffer works (see flutter_sound GitHub #650, #940).
+      final bytes = await file.readAsBytes();
       await _player.startPlayer(
-        fromURI: normalizedPath,
+        fromDataBuffer: bytes,
         codec: _codec,
         whenFinished: () {
           if (mounted) setState(() => _isPlaying = false);
@@ -178,74 +184,84 @@ class _TalkScreenState extends State<TalkScreen> {
         appBar: AppBar(
           title: const Text("Let's Talk!"),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              Text(
-                'Your prompt:',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              Card(
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text(
-                    _currentPrompt,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              if (_showFeedback) ...[
-                const SizedBox(height: 16),
-                Icon(Icons.thumb_up, size: 56, color: AppColors.accent),
-                const SizedBox(height: 8),
-                Text(
-                  "You did great!",
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: AppColors.accent,
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 16),
+                      Text(
+                        'Your prompt:',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              RecordControl(
-                onPressed: _onRecordPressed,
-                size: 120,
-                isRecording: _isRecording,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _isRecording
-                    ? 'Recording...'
-                    : _isPlaying
-                        ? 'Playing...'
-                        : 'Tap to record',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-              ),
-              if (_recordedFilePath != null && !_isRecording) ...[
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _onPlayBackPressed,
-                  icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
-                  label: Text(_isPlaying ? 'Stop' : 'Listen again'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      const SizedBox(height: 16),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Text(
+                            _currentPrompt,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                      if (_showFeedback) ...[
+                        const SizedBox(height: 16),
+                        Icon(Icons.thumb_up, size: 56, color: AppColors.accent),
+                        const SizedBox(height: 8),
+                        Text(
+                          "You did great!",
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: AppColors.accent,
+                              ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      RecordControl(
+                        onPressed: _onRecordPressed,
+                        size: 120,
+                        isRecording: _isRecording,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isRecording
+                            ? 'Recording...'
+                            : _isPlaying
+                                ? 'Playing...'
+                                : 'Tap to record',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                      if (_recordedFilePath != null && !_isRecording) ...[
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: _onPlayBackPressed,
+                          icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
+                          label: Text(_isPlaying ? 'Stop' : 'Listen again'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: _pickNewPrompt,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('New prompt'),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _pickNewPrompt,
-                icon: const Icon(Icons.refresh),
-                label: const Text('New prompt'),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
