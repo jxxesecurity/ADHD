@@ -2,7 +2,6 @@ import 'dart:math';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:flutter_sound/flutter_sound.dart';
@@ -32,7 +31,7 @@ class _TalkScreenState extends State<TalkScreen> {
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   final FlutterSoundPlayer _player = FlutterSoundPlayer();
 
-  static const Codec _codec = Codec.aacADTS;
+  static const Codec _codec = Codec.aacMP4;
 
   @override
   void initState() {
@@ -69,17 +68,13 @@ class _TalkScreenState extends State<TalkScreen> {
     // TODO: FlutterTts().speak(_currentPrompt);
   }
 
-  Future<String> _getRecordingPath() async {
-    final dir = await getTemporaryDirectory();
-    return '${dir.path}/speech4adhd_talk_${DateTime.now().millisecondsSinceEpoch}.aac';
-  }
-
   Future<void> _onRecordPressed() async {
     if (_isRecording) {
       setState(() => _isRecording = false);
       try {
         final path = await _recorder.stopRecorder();
         if (mounted && path != null && path.isNotEmpty) {
+          // Keep the raw path returned by flutter_sound; use it directly for playback.
           setState(() {
             _recordedFilePath = path;
             _hasPlayedBack = false;
@@ -116,9 +111,10 @@ class _TalkScreenState extends State<TalkScreen> {
     }
 
     try {
-      final path = await _getRecordingPath();
+      // Let flutter_sound manage the storage location; we just give it a file name.
+      const fileName = 'speech4adhd_talk.mp4';
       await _recorder.startRecorder(
-        toFile: path,
+        toFile: fileName,
         codec: _codec,
         sampleRate: 44100,
         numChannels: 1,
@@ -136,7 +132,10 @@ class _TalkScreenState extends State<TalkScreen> {
   Future<void> _onPlayBackPressed() async {
     final path = _recordedFilePath;
     if (path == null || path.isEmpty) return;
-    final file = File(path);
+
+    // Some platforms may return a file URI like file://...; normalize to a real path for File().
+    final normalizedPath = path.startsWith('file://') ? path.substring(7) : path;
+    final file = File(normalizedPath);
     if (!await file.exists()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,7 +154,7 @@ class _TalkScreenState extends State<TalkScreen> {
     try {
       setState(() => _isPlaying = true);
       await _player.startPlayer(
-        fromURI: path,
+        fromURI: normalizedPath,
         codec: _codec,
         whenFinished: () {
           if (mounted) setState(() => _isPlaying = false);
