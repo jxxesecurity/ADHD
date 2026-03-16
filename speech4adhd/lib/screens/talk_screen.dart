@@ -199,7 +199,7 @@ class _TalkScreenState extends State<TalkScreen> {
                 ),
               ),
               if (_showFeedback) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 Icon(Icons.thumb_up, size: 56, color: AppColors.accent),
                 const SizedBox(height: 8),
                 Text(
@@ -209,7 +209,7 @@ class _TalkScreenState extends State<TalkScreen> {
                       ),
                 ),
               ],
-              const Spacer(),
+              const SizedBox(height: 16),
               RecordControl(
                 onPressed: _onRecordPressed,
                 size: 120,
@@ -227,7 +227,7 @@ class _TalkScreenState extends State<TalkScreen> {
                     ),
               ),
               if (_recordedFilePath != null && !_isRecording) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: _onPlayBackPressed,
                   icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
