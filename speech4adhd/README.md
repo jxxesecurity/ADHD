@@ -1,17 +1,30 @@
-# speech4adhd
+# Speech4ADHD
 
-Fun app helping kids with ADHD practice speaking, debating, short speeches + English communication for non-native speakers
+Flutter app for kids **~6–12** with ADHD: short verbal activities, **Chat with Spark** (AI buddy), optional **Free Talk** (prompt + record + replay), quick debate, rewards.
 
-## Getting Started
+## Chat with Spark (Gemini)
 
-This project is a starting point for a Flutter application.
+Spark uses **speech-to-text** → **Google Gemini** → **text-to-speech**. You must provide a Gemini API key at run time.
 
-A few resources to get you started if this is your first Flutter project:
+See **[docs/GEMINI_SETUP.md](docs/GEMINI_SETUP.md)** for `--dart-define=GEMINI_API_KEY=...` and safety notes.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run --dart-define=GEMINI_API_KEY=your_key_here
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Features
+
+- **Let's Talk** — segmented control: **Chat with Spark** | **Free Talk**
+- **Quick Debate**, **Rewards**, etc.
+
+## Requirements
+
+- Flutter SDK (see `pubspec.yaml` for Dart SDK)
+- Microphone + (for Spark) speech recognition permission on iOS/Android
+- Internet for Gemini (Spark only)
+
+## Getting started
+
+- [Flutter install](https://docs.flutter.dev/get-started/install)
+- iOS: open `ios/Runner.xcworkspace`, set signing team for a physical device if needed.

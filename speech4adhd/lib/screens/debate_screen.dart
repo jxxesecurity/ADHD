@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -39,38 +38,12 @@ class _DebateScreenState extends State<DebateScreen> {
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<PlayerState>? _playerStateSub;
 
-  // #region agent log
-  static const _kHostDebugLog =
-      '/Users/yanchou/projects/ADHD/speech4adhd/.cursor/debug-db3ee5.log';
-
-  void _agentLog(String hypothesisId, String message, Map<String, Object?> data) {
-    final line = jsonEncode({
-      'sessionId': 'db3ee5',
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'location': 'debate_screen.dart',
-      'message': message,
-      'data': data,
-      'hypothesisId': hypothesisId,
-      'runId': 'post-fix',
-    });
-    debugPrint('DEBUG_DB3EE5: $line');
-    try {
-      if (Platform.isMacOS) {
-        File(_kHostDebugLog).writeAsStringSync('$line\n', mode: FileMode.append);
-      }
-    } catch (_) {}
-  }
-  // #endregion
-
   @override
   void initState() {
     super.initState();
     _pickNewTopic();
     _playerStateSub = _player.playerStateStream.listen((state) {
       if (!mounted) return;
-      // #region agent log
-      _agentLog('H1', 'playerStateStream', {'playing': state.playing});
-      // #endregion
       setState(() => _isPlaying = state.playing);
     });
   }
@@ -114,14 +87,6 @@ class _DebateScreenState extends State<DebateScreen> {
         final stopped = await _record.stop();
         final path = (stopped != null && stopped.isNotEmpty) ? stopped : _recordingPath;
         _recordingPath = null;
-        // #region agent log
-        _agentLog('H3', 'record_stop', {
-          'stoppedNull': stopped == null,
-          'stoppedEmpty': stopped?.isEmpty ?? false,
-          'usedFallback': stopped == null || stopped.isEmpty,
-          'pathOk': path != null && path.isNotEmpty,
-        });
-        // #endregion
         if (mounted && path != null && path.isNotEmpty) {
           setState(() {
             _recordedFilePath = path;
@@ -188,26 +153,16 @@ class _DebateScreenState extends State<DebateScreen> {
     }
 
     if (_isPlaying) {
-      // #region agent log
-      _agentLog('H1', 'playback_stop_requested', {});
-      // #endregion
       await _player.stop();
       return;
     }
 
     try {
-      // #region agent log
-      _agentLog('H1', 'playback_start', {'pathLen': path.length});
-      // #endregion
       await _player.setFilePath(path);
       await _player.play();
-      // _isPlaying follows playerStateStream until complete or stop()
     } catch (e) {
       if (mounted) {
         setState(() => _isPlaying = false);
-        // #region agent log
-        _agentLog('H2', 'playback_error', {'error': e.toString()});
-        // #endregion
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Oops! Couldn't play — try recording again! 🎤"),

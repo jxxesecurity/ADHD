@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Speech4ADHD uses the microphone so you can record your voice and practice talking. Your recordings stay on your device.</string>
+	<string>Speech4ADHD uses the microphone so you can talk to Spark, record practice, and use debates. Audio is used on your device and for speech features you choose.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Speech4adhd</string>
 	<key>CFBundleExecutable</key>
@@ -52,7 +52,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Speech4ADHD uses speech recognition to show what you said on screen. This helps you see your words and get positive feedback.</string>
+	<string>Speech4ADHD turns what you say into text so you can chat with your buddy Spark. Your words are sent to Google only when Spark replies (needs internet).</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
