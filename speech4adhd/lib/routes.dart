@@ -81,6 +81,8 @@ class _MainScaffold extends StatelessWidget {
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
+        // Only the selected tab shows its label — avoids horizontal overflow on small iPhones.
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         onDestinationSelected: (index) {
           switch (index) {
             case 0:
@@ -112,11 +114,13 @@ class _MainScaffold extends StatelessWidget {
             icon: Icon(Icons.forum_outlined),
             selectedIcon: Icon(Icons.forum),
             label: 'Debate',
+            tooltip: 'Quick Debate',
           ),
           NavigationDestination(
             icon: Icon(Icons.star_outline),
             selectedIcon: Icon(Icons.star),
-            label: 'Rewards',
+            label: 'Stars',
+            tooltip: 'My Rewards',
           ),
         ],
       ),

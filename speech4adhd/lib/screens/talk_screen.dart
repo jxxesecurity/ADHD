@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-
-import 'package:flutter_sound/flutter_sound.dart';
+import 'package:record/record.dart';
+import 'package:just_audio/just_audio.dart';
 
 import '../constants/colors.dart';
 import '../constants/prompts.dart';
@@ -30,36 +31,36 @@ class _TalkScreenState extends State<TalkScreen> {
   String? _recordingPath;
   final _random = Random();
 
-  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
-  final FlutterSoundPlayer _player = FlutterSoundPlayer();
-
-  static const Codec _codec = Codec.aacADTS;
+  final AudioRecorder _record = AudioRecorder();
+  final AudioPlayer _player = AudioPlayer();
+  StreamSubscription<PlayerState>? _playerStateSub;
 
   @override
   void initState() {
     super.initState();
     _pickNewPrompt();
-    _initAudio();
-  }
-
-  Future<void> _initAudio() async {
-    await _recorder.openRecorder();
-    await _player.openPlayer();
+    _playerStateSub = _player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() => _isPlaying = state.playing);
+    });
   }
 
   @override
   void dispose() {
-    _recorder.closeRecorder();
-    _player.closePlayer();
+    _playerStateSub?.cancel();
+    _record.dispose();
+    _player.dispose();
     super.dispose();
   }
 
   void _pickNewPrompt() {
+    unawaited(_player.stop());
     setState(() {
       _currentPrompt = talkingPrompts[_random.nextInt(talkingPrompts.length)];
       _hasPlayedBack = false;
       _showFeedback = false;
       _recordedFilePath = null;
+      _recordingPath = null;
     });
     _speakPrompt();
   }
@@ -71,11 +72,13 @@ class _TalkScreenState extends State<TalkScreen> {
   }
 
   Future<void> _onRecordPressed() async {
-    if (_isRecording) {
-      setState(() => _isRecording = false);
-      try {
-        await _recorder.stopRecorder();
-        final path = _recordingPath;
+    try {
+      if (_isRecording) {
+        setState(() => _isRecording = false);
+        final stopped = await _record.stop();
+        final path =
+            (stopped != null && stopped.isNotEmpty) ? stopped : _recordingPath;
+        _recordingPath = null;
         if (mounted && path != null && path.isNotEmpty) {
           setState(() {
             _recordedFilePath = path;
@@ -83,48 +86,44 @@ class _TalkScreenState extends State<TalkScreen> {
             _showFeedback = true;
           });
         }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not stop recording: $e')),
-          );
-        }
+        return;
       }
-      return;
-    }
 
-    final granted = await PermissionService.requestMicrophone();
-    if (!granted && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Microphone is off. Tap "Open Settings" and turn on Microphone for this app.',
+      final granted = await PermissionService.requestMicrophone();
+      if (!granted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Microphone is off. Tap "Open Settings" and turn on Microphone for this app.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Open Settings',
+              onPressed: () async {
+                await openAppSettings();
+              },
+            ),
           ),
-          behavior: SnackBarBehavior.floating,
-          action: SnackBarAction(
-            label: 'Open Settings',
-            onPressed: () async {
-              await openAppSettings();
-            },
-          ),
-        ),
-      );
-      return;
-    }
+        );
+        return;
+      }
 
-    try {
       final dir = await getTemporaryDirectory();
       final path =
-          '${dir.path}/speech4adhd_talk_${DateTime.now().millisecondsSinceEpoch}.aac';
+          '${dir.path}/speech4adhd_talk_${DateTime.now().millisecondsSinceEpoch}.m4a';
       _recordingPath = path;
 
-      await _recorder.startRecorder(
-        toFile: path,
-        codec: _codec,
-        sampleRate: 44100,
-        numChannels: 1,
+      await _record.start(
+        RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: path,
       );
-      if (mounted) setState(() => _isRecording = true);
+      if (mounted) {
+        setState(() => _isRecording = true);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -149,29 +148,24 @@ class _TalkScreenState extends State<TalkScreen> {
     }
 
     if (_isPlaying) {
-      await _player.stopPlayer();
-      if (mounted) setState(() => _isPlaying = false);
+      await _player.stop();
       return;
     }
 
     try {
-      setState(() => _isPlaying = true);
-      // Workaround for iOS/Android: fromURI can fail with local file path;
-      // playing from buffer works (see flutter_sound GitHub #650, #940).
-      final bytes = await file.readAsBytes();
-      await _player.startPlayer(
-        fromDataBuffer: bytes,
-        codec: _codec,
-        whenFinished: () {
-          if (mounted) setState(() => _isPlaying = false);
-        },
-      );
-      if (mounted) setState(() => _hasPlayedBack = true);
+      await _player.setFilePath(path);
+      await _player.play();
+      if (mounted) {
+        setState(() => _hasPlayedBack = true);
+      }
+      // _isPlaying follows playerStateStream until complete or stop()
     } catch (e) {
       if (mounted) {
         setState(() => _isPlaying = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not play back: $e')),
+          SnackBar(
+            content: const Text("Oops! Couldn't play — try recording again! 🎤"),
+          ),
         );
       }
     }

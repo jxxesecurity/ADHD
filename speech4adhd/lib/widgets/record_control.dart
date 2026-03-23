@@ -45,36 +45,45 @@ class _RecordControlState extends State<RecordControl>
   @override
   Widget build(BuildContext context) {
     final color = widget.isRecording ? AppColors.primary : AppColors.accent;
-    return GestureDetector(
-      onTap: widget.onPressed,
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (context, child) {
-          final scale = widget.isRecording ? _pulse.value : 1.0;
-          return Transform.scale(
-            scale: scale,
-            child: child,
-          );
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: widget.size,
-          height: widget.size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.5),
-                blurRadius: widget.isRecording ? 20 : 12,
-                spreadRadius: widget.isRecording ? 4 : 2,
+    // Extra box so pulse scale + shadow don't overflow parent RenderFlex.
+    final box = 1.28 * widget.size;
+    return SizedBox(
+      width: box,
+      height: box,
+      child: Center(
+        child: GestureDetector(
+          onTap: widget.onPressed,
+          child: AnimatedBuilder(
+            animation: _pulse,
+            builder: (context, child) {
+              final scale = widget.isRecording ? _pulse.value : 1.0;
+              return Transform.scale(
+                scale: scale,
+                alignment: Alignment.center,
+                child: child,
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: widget.size,
+              height: widget.size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.5),
+                    blurRadius: widget.isRecording ? 20 : 12,
+                    spreadRadius: widget.isRecording ? 4 : 2,
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Icon(
-            widget.isRecording ? Icons.stop_rounded : Icons.mic,
-            size: widget.size * 0.45,
-            color: AppColors.white,
+              child: Icon(
+                widget.isRecording ? Icons.stop_rounded : Icons.mic,
+                size: widget.size * 0.45,
+                color: AppColors.white,
+              ),
+            ),
           ),
         ),
       ),

@@ -31,7 +31,9 @@ class BigFriendlyButton extends StatelessWidget {
         style: FilledButton.styleFrom(
           backgroundColor: color,
           foregroundColor: foregroundColor,
-          padding: padding ?? const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+          padding: padding ?? const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
+          minimumSize: const Size(0, 48),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(28),
           ),
@@ -39,17 +41,26 @@ class BigFriendlyButton extends StatelessWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 32),
-              const SizedBox(width: 12),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Icon(icon, size: 22),
+              ),
+              const SizedBox(width: 6),
             ],
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                textAlign: TextAlign.center,
               ),
             ),
           ],
