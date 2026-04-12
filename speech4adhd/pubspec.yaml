@@ -1,5 +1,5 @@
-name: speech4adhd
-description: "Fun app helping kids with ADHD (ages 6–14) practice communication skills: short talking prompts, quick debates, record & listen back, rewards & gamification."
+name: my_mic
+description: "Fun app helping kids with ADHD (ages 6–14) practice communication skills: short talking prompts, quick debates, record & listen back."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -24,6 +24,7 @@ dependencies:
   record: ^6.2.0
   just_audio: ^0.9.40
   google_generative_ai: ^0.4.7
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -32,7 +33,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Optional: add when you have files
-  # assets:
+  assets:
+    - assets/default.env
   #   - assets/lottie/
   #   - assets/images/

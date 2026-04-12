@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_tts/flutter_tts.dart';
 
-/// Text-to-speech tuned for short, friendly lines (Spark).
+/// Text-to-speech tuned for short, friendly lines (Buddy).
 class SparkVoiceService {
   SparkVoiceService() : _tts = FlutterTts();
 

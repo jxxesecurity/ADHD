@@ -1,4 +1,4 @@
-# Speech4ADHD
+# myMic
 
 Flutter app for kids **~6–12** with ADHD: short verbal activities, **Chat with Spark** (AI buddy), optional **Free Talk** (prompt + record + replay), quick debate, rewards.
 

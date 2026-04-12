@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/home_screen.dart';
+import 'screens/my_voice_screen.dart';
 import 'screens/talk_screen.dart';
 import 'screens/debate_screen.dart';
-import 'screens/rewards_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
 final GlobalKey<NavigatorState> _shellNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'shell');
 
-/// GoRouter configuration: Home, Let's Talk, Quick Debate, My Rewards.
+/// GoRouter configuration: Home, My Voice, Let's Chat, Quick Debate.
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/',
@@ -30,6 +30,12 @@ final GoRouter appRouter = GoRouter(
           ),
         ),
         GoRoute(
+          path: '/my-voice',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: MyVoiceScreen(),
+          ),
+        ),
+        GoRoute(
           path: '/talk',
           pageBuilder: (context, state) => const NoTransitionPage(
             child: TalkScreen(),
@@ -41,12 +47,6 @@ final GoRouter appRouter = GoRouter(
             child: DebateScreen(),
           ),
         ),
-        GoRoute(
-          path: '/rewards',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: RewardsScreen(),
-          ),
-        ),
       ],
     ),
   ],
@@ -54,12 +54,12 @@ final GoRouter appRouter = GoRouter(
 
 int _calculateSelectedIndex(String path) {
   switch (path) {
+    case '/my-voice':
+      return 0;
     case '/talk':
       return 1;
     case '/debate':
       return 2;
-    case '/rewards':
-      return 3;
     case '/':
     default:
       return 0;
@@ -94,9 +94,6 @@ class _MainScaffold extends StatelessWidget {
             case 2:
               context.go('/debate');
               break;
-            case 3:
-              context.go('/rewards');
-              break;
           }
         },
         destinations: const [
@@ -106,21 +103,16 @@ class _MainScaffold extends StatelessWidget {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.mic_none),
-            selectedIcon: Icon(Icons.mic),
-            label: 'Talk',
+            icon: Icon(Icons.forum_outlined),
+            selectedIcon: Icon(Icons.forum_rounded),
+            label: 'Chat',
+            tooltip: "Let's Chat",
           ),
           NavigationDestination(
             icon: Icon(Icons.forum_outlined),
             selectedIcon: Icon(Icons.forum),
             label: 'Debate',
             tooltip: 'Quick Debate',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.star_outline),
-            selectedIcon: Icon(Icons.star),
-            label: 'Stars',
-            tooltip: 'My Rewards',
           ),
         ],
       ),

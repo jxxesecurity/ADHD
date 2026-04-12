@@ -1,4 +1,4 @@
-package com.speech4adhd.speech4adhd
+package com.mymic.mymic
 
 import io.flutter.embedding.android.FlutterActivity
 

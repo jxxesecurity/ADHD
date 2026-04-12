@@ -1,20 +1,13 @@
-import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart';
 
 import '../constants/colors.dart';
 import '../constants/prompts.dart';
-import '../services/permission_service.dart';
 import '../widgets/big_friendly_button.dart';
-import '../widgets/record_control.dart';
+import '../widgets/debate_spark_panel.dart';
 
-/// Quick debate: pick agree/disagree, speak why, record → listen back (like Let's Talk).
+/// Quick debate: topic → Agree/Disagree → Spark reacts (STT + AI + TTS).
 class DebateScreen extends StatefulWidget {
   const DebateScreen({super.key});
 
@@ -25,154 +18,26 @@ class DebateScreen extends StatefulWidget {
 class _DebateScreenState extends State<DebateScreen> {
   late String _topic;
   bool? _side; // true = agree, false = disagree
-  bool _isRecording = false;
-  bool _showFeedback = false;
-  bool _isPlaying = false;
-  String? _recordedFilePath;
-  /// Path passed to [AudioRecorder.start]; used if [AudioRecorder.stop] returns null.
-  String? _recordingPath;
-  static const int _timerSeconds = 90; // 1.5 min
   final _random = Random();
-
-  final AudioRecorder _record = AudioRecorder();
-  final AudioPlayer _player = AudioPlayer();
-  StreamSubscription<PlayerState>? _playerStateSub;
 
   @override
   void initState() {
     super.initState();
-    _pickNewTopic();
-    _playerStateSub = _player.playerStateStream.listen((state) {
-      if (!mounted) return;
-      setState(() => _isPlaying = state.playing);
-    });
-  }
-
-  @override
-  void dispose() {
-    _playerStateSub?.cancel();
-    _record.dispose();
-    _player.dispose();
-    super.dispose();
+    _topic = pickDebateTopic(_random);
   }
 
   void _pickNewTopic() {
-    unawaited(_player.stop());
+    final previous = _topic;
     setState(() {
-      _topic = debateTopics[_random.nextInt(debateTopics.length)];
+      _topic = pickDebateTopic(_random, avoid: previous);
       _side = null;
-      _isRecording = false;
-      _showFeedback = false;
-      _recordedFilePath = null;
-      _recordingPath = null;
-      _isPlaying = false;
     });
   }
 
   void _chooseSide(bool agree) {
-    unawaited(_player.stop());
-    setState(() {
-      _side = agree;
-      _recordedFilePath = null;
-      _recordingPath = null;
-      _showFeedback = false;
-      _isPlaying = false;
-    });
+    setState(() => _side = agree);
   }
 
-  Future<void> _onRecordPressed() async {
-    try {
-      if (_isRecording) {
-        setState(() => _isRecording = false);
-        final stopped = await _record.stop();
-        final path = (stopped != null && stopped.isNotEmpty) ? stopped : _recordingPath;
-        _recordingPath = null;
-        if (mounted && path != null && path.isNotEmpty) {
-          setState(() {
-            _recordedFilePath = path;
-            _showFeedback = true;
-          });
-        }
-        return;
-      }
-
-      final granted = await PermissionService.requestMicrophone();
-      if (!granted && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Microphone is off. Tap "Open Settings" and turn on Microphone for this app.',
-            ),
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'Open Settings',
-              onPressed: () async {
-                await openAppSettings();
-              },
-            ),
-          ),
-        );
-        return;
-      }
-
-      final dir = await getTemporaryDirectory();
-      final path =
-          '${dir.path}/speech4adhd_debate_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      _recordingPath = path;
-
-      await _record.start(
-        RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: path,
-      );
-      if (mounted) setState(() => _isRecording = true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not start recording: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _onPlayBackPressed() async {
-    final path = _recordedFilePath;
-    if (path == null || path.isEmpty) return;
-
-    final file = File(path);
-    if (!await file.exists()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Recording file not found. Record again.')),
-        );
-      }
-      return;
-    }
-
-    if (_isPlaying) {
-      await _player.stop();
-      return;
-    }
-
-    try {
-      await _player.setFilePath(path);
-      await _player.play();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isPlaying = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Oops! Couldn't play — try recording again! 🎤"),
-          ),
-        );
-      }
-    }
-  }
-
-  /// Agree / Disagree side by side; each button flexes to half width (minus gap).
   Widget _agreeDisagreeButtons() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,16 +64,31 @@ class _DebateScreenState extends State<DebateScreen> {
   }
 
   Widget _newTopicButton() {
-    return Center(
-      child: TextButton(
-        onPressed: _pickNewTopic,
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.refresh, size: 22),
-            SizedBox(width: 8),
-            Text('New topic'),
-          ],
+    return TextButton(
+      onPressed: _pickNewTopic,
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.refresh, size: 22),
+          SizedBox(width: 8),
+          Text('New topic'),
+        ],
+      ),
+    );
+  }
+
+  Widget _debateStickyActions() {
+    return Material(
+      elevation: 6,
+      shadowColor: Colors.black26,
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 4),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: _newTopicButton(),
         ),
       ),
     );
@@ -220,120 +100,73 @@ class _DebateScreenState extends State<DebateScreen> {
       appBar: AppBar(
         title: const Text('Quick Debate'),
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  12,
-                  16,
-                  12 + MediaQuery.paddingOf(context).bottom + 8,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Topic:',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 10),
-                    Card(
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
                       child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Text(
-                          _topic,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          textAlign: TextAlign.center,
-                          softWrap: true,
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Topic:',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 10),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Text(
+                                  _topic,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                  textAlign: TextAlign.center,
+                                  softWrap: true,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (_side == null) ...[
+                              Text(
+                                'Pick a side!',
+                                style: Theme.of(context).textTheme.titleLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 14),
+                              _agreeDisagreeButtons(),
+                            ] else ...[
+                              Text(
+                                _side! ? "Why do you agree?" : "Why do you disagree?",
+                                style: Theme.of(context).textTheme.titleLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              DebateSparkPanel(
+                                key: ValueKey('$_topic' '_' '$_side'),
+                                topic: _topic,
+                                agreed: _side!,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    if (_side == null) ...[
-                      Text(
-                        'Pick a side!',
-                        style: Theme.of(context).textTheme.titleLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 14),
-                      _agreeDisagreeButtons(),
-                      const SizedBox(height: 16),
-                      _newTopicButton(),
-                    ] else ...[
-                      Text(
-                        _side! ? "Why do you agree?" : "Why do you disagree?",
-                        style: Theme.of(context).textTheme.titleLarge,
-                        textAlign: TextAlign.center,
-                      ),
-                      if (_timerSeconds > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'About ${_timerSeconds ~/ 60} min — say your reason!',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      if (_showFeedback) ...[
-                        const SizedBox(height: 16),
-                        Icon(Icons.thumb_up, size: 48, color: AppColors.accent),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Nice job! Great opinion!",
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: AppColors.accent,
-                              ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      Center(
-                        child: RecordControl(
-                          onPressed: _onRecordPressed,
-                          size: 100,
-                          isRecording: _isRecording,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _isRecording
-                            ? 'Recording...'
-                            : _isPlaying
-                                ? 'Playing...'
-                                : 'Tap to record your reason',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (_recordedFilePath != null && !_isRecording) ...[
-                        const SizedBox(height: 12),
-                        FilledButton.icon(
-                          onPressed: _onPlayBackPressed,
-                          icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
-                          label: Text(_isPlaying ? 'Stop' : 'Listen again'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.accent,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      _newTopicButton(),
-                    ],
-                  ],
-                ),
+                  );
+                },
               ),
             ),
-          );
-        },
+            _debateStickyActions(),
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 /// Fun talking prompts for kids with ADHD (ages 6–14).
 /// Short, exciting, open-ended — for communication practice only (no language learning).
 
@@ -34,7 +36,7 @@ const List<String> talkingPrompts = [
   'If you could talk to animals, which one would you chat with first?',
 ];
 
-/// Simple, silly debate topics for kids (1–3 min).
+/// Simple, silly debate topics for kids (short turns — keep it fun).
 const List<String> debateTopics = [
   'Is pizza better hot or cold?',
   'Cats vs. dogs — which is better?',
@@ -51,4 +53,32 @@ const List<String> debateTopics = [
   'Are dinosaurs cooler than space?',
   'Is it better to be really tall or really fast?',
   'Should kids choose what’s for dinner?',
+  'Are video games a sport?',
+  'Is it better to live in a treehouse or a castle?',
+  'Should school start later in the morning?',
+  'Ice cream or cake — which is the real champion?',
+  'Would you rather explore the ocean or outer space?',
+  'Is it okay to wear pajamas all day sometimes?',
+  'Are books better than movies?',
+  'Should pets be allowed at school?',
+  'Is a messy room a sign of creativity?',
+  'Would you rather fly on a dragon or sail a pirate ship?',
+  'Is Friday the best day of the week?',
+  'Should there be a national “silly hat” day every week?',
+  'Is it more fun to build with LEGO or draw?',
+  'Are robots going to be our friends or our bosses?',
+  'Should kids pick their own bedtime on weekends?',
 ];
+
+/// Picks a random debate topic, avoiding [avoid] when possible (no repeat twice in a row).
+String pickDebateTopic(Random random, {String? avoid}) {
+  if (debateTopics.isEmpty) return '';
+  if (debateTopics.length == 1) return debateTopics[0];
+  String picked;
+  var tries = 0;
+  do {
+    picked = debateTopics[random.nextInt(debateTopics.length)];
+    tries++;
+  } while (avoid != null && picked == avoid && tries < 64);
+  return picked;
+}

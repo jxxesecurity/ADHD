@@ -9,11 +9,18 @@ class SparkChatService {
 
   final ChatSession _chat;
 
-  /// Model id — flash is fast and works well for short kid-friendly replies.
-  static const String defaultModel = 'gemini-1.5-flash';
+  /// Model id — must support `generateContent` on your API version.
+  /// `gemini-1.5-flash` is no longer available for many keys; use current Flash.
+  /// See: https://ai.google.dev/gemini-api/docs/models/gemini
+  static const String defaultModel = 'gemini-2.5-flash';
 
   /// Create a new chat with Spark's opening line already in history.
-  factory SparkChatService.create({String? apiKey, String model = defaultModel}) {
+  /// [openingMessage] must match what the user sees/hears (same random pick as the UI).
+  factory SparkChatService.create({
+    String? apiKey,
+    String model = defaultModel,
+    required String openingMessage,
+  }) {
     final key = apiKey ?? resolveGeminiApiKey();
     if (key.isEmpty) {
       throw StateError('Missing GEMINI_API_KEY. Add --dart-define=GEMINI_API_KEY=... when running.');
@@ -31,7 +38,7 @@ class SparkChatService {
 
     final chat = modelInstance.startChat(
       history: [
-        Content.model([TextPart(SparkAiPrompt.openingGreeting)]),
+        Content.model([TextPart(openingMessage)]),
       ],
     );
 
@@ -51,9 +58,9 @@ class SparkChatService {
       }
       return text;
     } on GenerativeAIException catch (e) {
-      throw SparkChatException('Spark had a problem: ${e.message}');
+      throw SparkChatException('Buddy had a problem: ${e.message}');
     } catch (e) {
-      throw SparkChatException('Could not reach Spark. Check the internet and try again! ($e)');
+      throw SparkChatException('Could not reach Buddy. Check the internet and try again! ($e)');
     }
   }
 }

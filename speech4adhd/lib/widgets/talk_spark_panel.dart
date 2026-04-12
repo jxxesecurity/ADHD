@@ -12,7 +12,7 @@ import '../services/spark_chat_service.dart';
 import '../services/spark_voice_service.dart';
 import 'record_control.dart';
 
-/// ADHD-friendly chat UI: Spark (AI) + kid bubbles, mic, STT → Gemini → TTS.
+/// ADHD-friendly chat UI: Buddy (AI) + kid bubbles, mic, STT → Gemini → TTS.
 class TalkSparkPanel extends StatefulWidget {
   const TalkSparkPanel({super.key});
 
@@ -39,19 +39,29 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
   bool _speechReady = false;
   _SparkPhase _phase = _SparkPhase.idle;
   String _liveTranscript = '';
+  /// Last non-empty phrase in this session (partials can be cleared by the engine on final).
+  String _sessionLastNonEmpty = '';
   bool _listenSession = false;
+  /// True while user tapped "stop" — blocks [onStatus] from finishing the
+  /// session early (before final words land in [SpeechToText.lastRecognizedWords]).
+  bool _manualStopInProgress = false;
+  /// Set before [SpeechToText.stop] so [onResult] can complete when `finalResult` is true.
+  Completer<String>? _finalWordsCompleter;
   bool _submitting = false;
 
   late AnimationController _avatarBreath;
+  /// Opening question for this chat (random; same string for bubble, TTS, and Gemini).
+  late String _openingLine;
 
   @override
   void initState() {
     super.initState();
+    _openingLine = SparkAiPrompt.randomOpening();
     _avatarBreath = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..repeat(reverse: true);
-    _bubbles.add(_Bubble(isUser: false, text: SparkAiPrompt.openingGreeting));
+    _bubbles.add(_Bubble(isUser: false, text: _openingLine));
     _initSpeech();
     _resetChatService();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -67,7 +77,7 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
       await _voice.init();
       if (!mounted) return;
       setState(() => _phase = _SparkPhase.speaking);
-      await _voice.speak(SparkAiPrompt.openingGreeting);
+      await _voice.speak(_openingLine);
     } catch (_) {
       /* TTS can fail on some simulators — bubbles still show the greeting */
     } finally {
@@ -87,10 +97,16 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
         );
       },
       onStatus: (status) {
-        if (!mounted || !_listenSession) return;
-        // Pause-for-silence or system stop → treat like user released mic.
+        if (!mounted || !_listenSession || _manualStopInProgress) return;
+        // Silence timeout (pauseFor) or OS ended listen — finalize after a beat
+        // so [lastRecognizedWords] / last [onResult] can update.
         if (status == 'notListening' || status == 'done') {
-          unawaited(_onListenEnded());
+          // Plugin may deliver the final phrase up to ~2s after stop (see speech_to_text
+          // defaultFinalTimeout). Wait a bit so [lastRecognizedWords] / onResult catch up.
+          Future<void>.delayed(const Duration(milliseconds: 400), () {
+            if (!mounted || !_listenSession || _manualStopInProgress) return;
+            unawaited(_onListenEnded());
+          });
         }
       },
     );
@@ -101,7 +117,7 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     _chat = null;
     if (!hasGeminiApiKey) return;
     try {
-      _chat = SparkChatService.create();
+      _chat = SparkChatService.create(openingMessage: _openingLine);
     } catch (_) {
       _chat = null;
     }
@@ -141,8 +157,7 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     }
 
     if (_phase == _SparkPhase.listening) {
-      await _speech.stop();
-      await _onListenEnded();
+      await _stopListeningManually();
       return;
     }
 
@@ -162,7 +177,7 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
-            'Microphone is needed to talk to Spark. Tap Open Settings to turn it on.',
+            'Microphone is needed to talk to Buddy. Tap Open Settings to turn it on.',
           ),
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(
@@ -177,16 +192,31 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     setState(() {
       _phase = _SparkPhase.listening;
       _liveTranscript = '';
+      _sessionLastNonEmpty = '';
       _listenSession = true;
     });
+    _finalWordsCompleter = null;
 
     await _speech.listen(
       onResult: (r) {
         if (!mounted) return;
-        setState(() => _liveTranscript = r.recognizedWords);
+        final words = r.recognizedWords;
+        setState(() => _liveTranscript = words);
+        final t = words.trim();
+        if (t.isNotEmpty) {
+          _sessionLastNonEmpty = t;
+        }
+        if (r.finalResult) {
+          final c = _finalWordsCompleter;
+          if (c != null && !c.isCompleted) {
+            // Some devices send an empty final string; keep last good partial.
+            c.complete(t.isNotEmpty ? t : _sessionLastNonEmpty);
+          }
+        }
       },
       listenFor: const Duration(minutes: 2),
-      pauseFor: const Duration(seconds: 5),
+      // Longer pause before auto-stop — kids often pause mid-sentence.
+      pauseFor: const Duration(seconds: 7),
       listenOptions: SpeechListenOptions(
         partialResults: true,
         cancelOnError: true,
@@ -195,15 +225,47 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     );
   }
 
-  Future<void> _onListenEnded() async {
+  /// User tapped the mic to stop — wait for engine final result (can be ~2s after [stop]).
+  Future<void> _stopListeningManually() async {
+    _manualStopInProgress = true;
+    _finalWordsCompleter = Completer<String>();
+    final c = _finalWordsCompleter;
+    try {
+      await _speech.stop();
+      // Match speech_to_text defaultFinalTimeout (2000ms) + small buffer for platform lag.
+      var text = '';
+      if (c != null) {
+        try {
+          text = await c.future.timeout(
+            const Duration(milliseconds: 2600),
+            onTimeout: () => '',
+          );
+        } catch (_) {
+          text = '';
+        }
+      }
+      if (text.trim().isEmpty) {
+        text = _rollupTranscript();
+      }
+      await _onListenEnded(preferredText: text.trim());
+    } finally {
+      _manualStopInProgress = false;
+      _finalWordsCompleter = null;
+    }
+  }
+
+  Future<void> _onListenEnded({String? preferredText}) async {
     if (!_listenSession || _submitting) return;
     _listenSession = false;
     if (!mounted) return;
 
-    final said = _liveTranscript.trim();
+    final said = (preferredText != null && preferredText.isNotEmpty)
+        ? preferredText
+        : _rollupTranscript();
     setState(() {
       _phase = _SparkPhase.idle;
       _liveTranscript = '';
+      _sessionLastNonEmpty = '';
     });
 
     if (said.isEmpty) {
@@ -219,6 +281,15 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     }
 
     await _sendUserLine(said);
+  }
+
+  /// Best effort after silence-stop or timeout — uses partials + plugin buffer.
+  String _rollupTranscript() {
+    final live = _liveTranscript.trim();
+    if (live.isNotEmpty) return live;
+    final last = _speech.lastRecognizedWords.trim();
+    if (last.isNotEmpty) return last;
+    return _sessionLastNonEmpty;
   }
 
   Future<void> _sendUserLine(String said) async {
@@ -285,13 +356,17 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
   void _newChat() {
     unawaited(_voice.stop());
     unawaited(_speech.stop());
+    _openingLine = SparkAiPrompt.randomOpening();
     setState(() {
       _bubbles
         ..clear()
-        ..add(_Bubble(isUser: false, text: SparkAiPrompt.openingGreeting));
+        ..add(_Bubble(isUser: false, text: _openingLine));
       _phase = _SparkPhase.idle;
       _liveTranscript = '';
+      _sessionLastNonEmpty = '';
       _listenSession = false;
+      _manualStopInProgress = false;
+      _finalWordsCompleter = null;
       _submitting = false;
     });
     _resetChatService();
@@ -305,132 +380,154 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     switch (_phase) {
       case _SparkPhase.idle:
         return hasGeminiApiKey
-            ? 'Tap the big mic to talk to Spark! 🎤'
-            : 'Add a Gemini key to chat with Spark (see snackbar).';
+            ? 'Tap the big mic to talk to Buddy! 🎤'
+            : 'Add a Gemini key to chat with Buddy (see snackbar).';
       case _SparkPhase.listening:
         return 'Listening… tap again when you’re done ✨';
       case _SparkPhase.thinking:
-        return 'Spark is thinking… 🤔';
+        return 'Buddy is thinking… 🤔';
       case _SparkPhase.speaking:
-        return 'Spark is talking… tap mic to stop';
+        return 'Buddy is talking… tap mic to stop';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    return Column(
-      children: [
-        if (!hasGeminiApiKey)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.yellow.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
+    Widget avatarSection() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: Tween<double>(begin: 1.0, end: 1.06).animate(
+                CurvedAnimation(parent: _avatarBreath, curve: Curves.easeInOut),
               ),
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  'Spark needs a Gemini API key. Run the app with '
-                  '--dart-define=GEMINI_API_KEY=your_key (ask a grown-up for help).',
-                  textAlign: TextAlign.center,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.yellow.withValues(alpha: 0.85),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Text('🦊', style: TextStyle(fontSize: 40)),
                 ),
               ),
             ),
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
-            children: [
-              ScaleTransition(
-                scale: Tween<double>(begin: 1.0, end: 1.06).animate(
-                  CurvedAnimation(parent: _avatarBreath, curve: Curves.easeInOut),
-                ),
-                child: Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.yellow.withValues(alpha: 0.85),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withValues(alpha: 0.35),
-                        blurRadius: 16,
-                        spreadRadius: 2,
+            const SizedBox(height: 4),
+            Text(
+              'Buddy',
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              if (!hasGeminiApiKey)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.yellow.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
+                      child: const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Text(
+                          'Buddy needs a Gemini API key. Run the app with '
+                          '--dart-define=GEMINI_API_KEY=your_key (ask a grown-up for help).',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: const Center(
-                    child: Text('🦊', style: TextStyle(fontSize: 44)),
+                ),
+              SliverToBoxAdapter(child: avatarSection()),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final b = _bubbles[i];
+                      return _ChatBubble(isUser: b.isUser, text: b.text);
+                    },
+                    childCount: _bubbles.length,
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Pinned controls: always visible, bounded height (no Column overflow).
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 4 + bottomInset),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_phase == _SparkPhase.listening && _liveTranscript.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    _liveTranscript,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              Text(
+                _statusLine,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Spark',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
+              Center(
+                child: RecordControl(
+                  onPressed: (_phase == _SparkPhase.thinking && !_listenSession)
+                      ? null
+                      : _onMicPressed,
+                  size: 100,
+                  isRecording: _phase == _SparkPhase.listening,
                 ),
+              ),
+              TextButton.icon(
+                onPressed: _newChat,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('New chat'),
               ),
             ],
           ),
         ),
-        Expanded(
-          child: ListView.builder(
-            controller: _scroll,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _bubbles.length,
-            itemBuilder: (context, i) {
-              final b = _bubbles[i];
-              return _ChatBubble(isUser: b.isUser, text: b.text);
-            },
-          ),
-        ),
-        if (_phase == _SparkPhase.listening && _liveTranscript.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text(
-              _liveTranscript,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _statusLine,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        RecordControl(
-          onPressed: (_phase == _SparkPhase.thinking && !_listenSession)
-              ? null
-              : _onMicPressed,
-          size: 112,
-          isRecording: _phase == _SparkPhase.listening,
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: _newChat,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('New chat'),
-        ),
-        const SizedBox(height: 8),
       ],
     );
   }

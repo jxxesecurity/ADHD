@@ -39,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const AnimatedMascot(size: 120),
               const SizedBox(height: 24),
               Text(
-                'Speech4ADHD',
+                'myMic',
                 style: Theme.of(context).textTheme.displayMedium?.copyWith(
                       color: AppColors.primary,
                       fontSize: 34,
@@ -56,8 +56,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const Spacer(flex: 1),
               BigFriendlyButton(
-                label: "Let's Talk!",
-                icon: Icons.mic,
+                label: 'My Voice',
+                icon: Icons.record_voice_over_rounded,
+                backgroundColor: AppColors.blue,
+                onPressed: () => context.go('/my-voice'),
+              ),
+              const SizedBox(height: 16),
+              BigFriendlyButton(
+                label: "Let's Chat",
+                icon: Icons.forum_rounded,
                 backgroundColor: AppColors.primary,
                 onPressed: () => context.go('/talk'),
               ),
@@ -67,14 +74,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.forum,
                 backgroundColor: AppColors.accent,
                 onPressed: () => context.go('/debate'),
-              ),
-              const SizedBox(height: 16),
-              BigFriendlyButton(
-                label: 'My Rewards',
-                icon: Icons.star,
-                backgroundColor: AppColors.yellow,
-                foregroundColor: AppColors.textPrimary,
-                onPressed: () => context.go('/rewards'),
               ),
               const Spacer(flex: 2),
             ],

@@ -1,20 +1,12 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:speech4adhd/app.dart';
+import 'package:my_mic/app.dart';
 
 void main() {
-  testWidgets('Home screen smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const Speech4AdhdApp());
-
-    // Verify home screen shows app title.
-    expect(find.text('Speech4ADHD'), findsOneWidget);
-    expect(find.text("Let's Talk!"), findsOneWidget);
+  testWidgets('App loads', (WidgetTester tester) async {
+    await tester.pumpWidget(const MyMicApp());
+    // HomeScreen schedules a 400ms greeting delay — elapse it before dispose.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('myMic'), findsOneWidget);
   });
 }

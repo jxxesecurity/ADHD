@@ -100,7 +100,7 @@ class _TalkFreeModeState extends State<TalkFreeMode> {
 
       final dir = await getTemporaryDirectory();
       final path =
-          '${dir.path}/speech4adhd_talk_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          '${dir.path}/mymic_talk_${DateTime.now().millisecondsSinceEpoch}.m4a';
       _recordingPath = path;
 
       await _record.start(

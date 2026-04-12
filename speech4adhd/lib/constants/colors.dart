@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Bright ADHD-friendly color palette for Speech4ADHD.
+/// Bright ADHD-friendly color palette for myMic.
 /// High contrast, cheerful, non-overwhelming.
 class AppColors {
   AppColors._();

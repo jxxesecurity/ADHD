@@ -2,7 +2,21 @@
 
 **Chat with Spark** uses [Google AI Studio](https://aistudio.google.com/) (Gemini). You need an API key on your **machine** or in your **CI** — never commit keys to git.
 
-## Option A — `--dart-define` (recommended)
+## Option A — bundled `assets/default.env` (dev)
+
+The app loads `assets/default.env` at startup (see `lib/main.dart`). You can put your key there:
+
+```
+GEMINI_API_KEY=paste_your_key_here
+```
+
+For **public repos**, prefer `--dart-define` or a backend so you don’t commit keys.
+
+### Model not found / `generateContent` errors
+
+Google retires model names over time. The app uses **`gemini-2.5-flash`** by default (`lib/services/spark_chat_service.dart`). If you see errors like *“model is not found for API version v1beta”*, check [current model IDs](https://ai.google.dev/gemini-api/docs/models/gemini) and update `defaultModel` in code to a listed Flash model (e.g. `gemini-2.5-flash-lite`).
+
+## Option B — `--dart-define` (recommended for releases)
 
 Run or build with:
 
@@ -23,7 +37,7 @@ flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY_HERE
 
 For **Archive / Release**, add the same `--dart-define` in your CI or a small build script. Avoid hardcoding the key inside `Info.plist` or Dart source files that you commit.
 
-## Option B — shell environment (desktop)
+## Option C — shell environment (desktop)
 
 ```bash
 export GEMINI_API_KEY=YOUR_KEY_HERE

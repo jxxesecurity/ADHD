@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'constants/colors.dart';
 
-/// Global theme for Speech4ADHD.
+/// Global theme for myMic.
 /// Bright, ADHD-friendly: large fonts, rounded corners, high contrast.
 class AppTheme {
   AppTheme._();
