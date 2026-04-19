@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>myMic — Practice talking, the fun way</title>
+    <meta
+      name="description"
+      content="A friendly app for kids to practice speaking: prompts, chat with Buddy, and quick debates. Built with ADHD-friendly design in mind."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="logo" href="#">myMic</a>
+        <nav class="nav" aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#why">Why myMic</a>
+          <a href="#parents">For families</a>
+          <a class="btn btn-primary" href="#get-app">Get the app</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <span class="hero-badge">Ages 6–14 · Low-pressure practice</span>
+          <h1 id="hero-title">Say it out loud—without the pressure.</h1>
+          <p class="hero-lead">
+            <strong>myMic</strong> helps kids build communication confidence with short
+            talking prompts, a chat buddy, and silly debates—wrapped in big buttons,
+            friendly colors, and plenty of encouragement.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="#get-app">Get the app</a>
+            <a class="btn btn-ghost" href="#features">See what’s inside</a>
+          </div>
+          <p class="hero-note">
+            Designed for kids who benefit from clear structure, positive feedback, and
+            bite-sized turns—not long lectures.
+          </p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="hero-mascot" role="img" aria-label="">🦊</div>
+          <p>Meet Buddy—your chat &amp; debate pal</p>
+        </div>
+      </section>
+
+      <section id="features" class="section-inner" aria-labelledby="features-title">
+        <h2 id="features-title" class="section-title">Three ways to practice</h2>
+        <p class="section-sub">
+          Pick what fits the day: solo speaking, a back-and-forth with Buddy, or a
+          playful agree/disagree moment.
+        </p>
+        <div class="features">
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🎙️</div>
+            <h3>My Voice</h3>
+            <p>
+              Random kid-friendly prompts, record your answer, listen back, and hear
+              <strong>Buddy repeats</strong>—your words echoed clearly so you can hear how
+              you sound.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">💬</div>
+            <h3>Let’s Chat</h3>
+            <p>
+              Talk to <strong>Buddy</strong> with the big mic. Short, encouraging replies
+              keep the conversation moving—great for warming up before school or winding
+              down after.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">⚡</div>
+            <h3>Quick Debate</h3>
+            <p>
+              Silly topics, pick a side (agree or disagree), say why—and Buddy chimes in
+              with a kind, playful response. Low stakes, lots of laughs.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="why" class="why">
+        <div class="section-inner">
+          <h2 class="section-title">Why we built it this way</h2>
+          <p class="section-sub">
+            Communication practice works best when it feels safe, short, and a little fun.
+          </p>
+          <ul class="why-list">
+            <li>Large tap targets and readable type—easy to use without squinting.</li>
+            <li>Short turns so energy stays high and attention doesn’t drift.</li>
+            <li>Positive framing: celebrate trying, not “perfect” speech.</li>
+            <li>Topics stay light—feelings, favorites, silly hypotheticals.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="parents" class="parents">
+        <div class="section-inner">
+          <h2 class="section-title">For grown-ups</h2>
+          <p>
+            myMic is a practice tool for speaking and conversation—not therapy and not a
+            replacement for professional care. We keep chats kid-appropriate; you control
+            device settings and any optional AI features (such as API keys) on your
+            family’s devices.
+          </p>
+          <p>
+            Review screen time and privacy settings together. If something in the app
+            worries you, talk with your child and adjust or remove access.
+          </p>
+        </div>
+      </section>
+
+      <section id="get-app" class="cta-band section-inner" aria-labelledby="get-title">
+        <h2 id="get-title" class="section-title">Get myMic</h2>
+        <p class="section-sub">
+          Install on your family’s phone or tablet. Marketing links below—replace with
+          your real App Store &amp; Google Play URLs when you publish the app.
+        </p>
+        <div>
+          <a class="btn btn-primary" href="#" aria-disabled="true">App Store (coming soon)</a>
+          <a class="btn btn-secondary" href="#" aria-disabled="true">Google Play (coming soon)</a>
+        </div>
+        <p class="store-note">
+          Building locally? Use Flutter to run on iOS or Android—see your project README.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        <strong>myMic</strong> — fun speaking practice for kids · Not medical advice.
+      </p>
+      <p>&copy; <span id="y"></span> · Update this footer with your name or organization.</p>
+    </footer>
+    <script>
+      document.getElementById("y").textContent = new Date().getFullYear();
+    </script>
+  </body>
+</html>

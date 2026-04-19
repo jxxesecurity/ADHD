@@ -39,18 +39,14 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
   bool _speechReady = false;
   _SparkPhase _phase = _SparkPhase.idle;
   String _liveTranscript = '';
-  /// Last non-empty phrase in this session (partials can be cleared by the engine on final).
   String _sessionLastNonEmpty = '';
   bool _listenSession = false;
-  /// True while user tapped "stop" — blocks [onStatus] from finishing the
-  /// session early (before final words land in [SpeechToText.lastRecognizedWords]).
   bool _manualStopInProgress = false;
-  /// Set before [SpeechToText.stop] so [onResult] can complete when `finalResult` is true.
   Completer<String>? _finalWordsCompleter;
   bool _submitting = false;
+  DateTime? _listenStartedAt;
 
   late AnimationController _avatarBreath;
-  /// Opening question for this chat (random; same string for bubble, TTS, and Gemini).
   late String _openingLine;
 
   @override
@@ -89,22 +85,44 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     final ok = await _speech.initialize(
       onError: (e) {
         if (!mounted) return;
+        final raw = e.errorMsg.trim();
+        if (raw.isEmpty) return;
+        final m = raw.toLowerCase();
+        if (m.contains('no_match') ||
+            m.contains('error_speech_timeout') ||
+            m.contains('error_listen_failed') ||
+            m.contains('error_busy')) {
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Speech helper hiccup: ${e.errorMsg}'),
+            content: Text('Speech helper hiccup: $raw'),
             behavior: SnackBarBehavior.floating,
           ),
         );
       },
       onStatus: (status) {
         if (!mounted || !_listenSession || _manualStopInProgress) return;
-        // Silence timeout (pauseFor) or OS ended listen — finalize after a beat
-        // so [lastRecognizedWords] / last [onResult] can update.
         if (status == 'notListening' || status == 'done') {
-          // Plugin may deliver the final phrase up to ~2s after stop (see speech_to_text
-          // defaultFinalTimeout). Wait a bit so [lastRecognizedWords] / onResult catch up.
           Future<void>.delayed(const Duration(milliseconds: 400), () {
             if (!mounted || !_listenSession || _manualStopInProgress) return;
+
+            final started = _listenStartedAt;
+            final elapsed = started != null
+                ? DateTime.now().difference(started)
+                : Duration.zero;
+
+            const minAutoFinalize = Duration(milliseconds: 2800);
+            if (elapsed < minAutoFinalize) {
+              if (_rollupTranscript().trim().isNotEmpty) {
+                unawaited(_onListenEnded());
+              }
+              return;
+            }
+
+            if (_speech.isListening) {
+              return;
+            }
             unawaited(_onListenEnded());
           });
         }
@@ -161,7 +179,6 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
       return;
     }
 
-    // idle → listen
     if (!_speechReady) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -182,7 +199,9 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(
             label: 'Open Settings',
-            onPressed: () => openAppSettings(),
+            onPressed: () async {
+              await openAppSettings();
+            },
           ),
         ),
       );
@@ -197,42 +216,73 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     });
     _finalWordsCompleter = null;
 
-    await _speech.listen(
-      onResult: (r) {
-        if (!mounted) return;
-        final words = r.recognizedWords;
-        setState(() => _liveTranscript = words);
-        final t = words.trim();
-        if (t.isNotEmpty) {
-          _sessionLastNonEmpty = t;
-        }
-        if (r.finalResult) {
-          final c = _finalWordsCompleter;
-          if (c != null && !c.isCompleted) {
-            // Some devices send an empty final string; keep last good partial.
-            c.complete(t.isNotEmpty ? t : _sessionLastNonEmpty);
+    await _voice.stop();
+
+    _listenStartedAt = DateTime.now();
+    try {
+      await _speech.listen(
+        onResult: (r) {
+          if (!mounted) return;
+          final words = r.recognizedWords;
+          setState(() => _liveTranscript = words);
+          final t = words.trim();
+          if (t.isNotEmpty) {
+            _sessionLastNonEmpty = t;
           }
-        }
-      },
-      listenFor: const Duration(minutes: 2),
-      // Longer pause before auto-stop — kids often pause mid-sentence.
-      pauseFor: const Duration(seconds: 7),
-      listenOptions: SpeechListenOptions(
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: ListenMode.dictation,
-      ),
-    );
+          if (r.finalResult) {
+            final c = _finalWordsCompleter;
+            if (c != null && !c.isCompleted) {
+              c.complete(t.isNotEmpty ? t : _sessionLastNonEmpty);
+            }
+          }
+        },
+        listenFor: const Duration(minutes: 2),
+        pauseFor: const Duration(seconds: 12),
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+        ),
+      );
+    } on ListenFailedException catch (e) {
+      _listenStartedAt = null;
+      if (mounted) {
+        setState(() {
+          _phase = _SparkPhase.idle;
+          _listenSession = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not start listening: ${e.message ?? "try again"}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    } catch (e) {
+      _listenStartedAt = null;
+      if (mounted) {
+        setState(() {
+          _phase = _SparkPhase.idle;
+          _listenSession = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not start listening: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
   }
 
-  /// User tapped the mic to stop — wait for engine final result (can be ~2s after [stop]).
   Future<void> _stopListeningManually() async {
     _manualStopInProgress = true;
     _finalWordsCompleter = Completer<String>();
     final c = _finalWordsCompleter;
     try {
       await _speech.stop();
-      // Match speech_to_text defaultFinalTimeout (2000ms) + small buffer for platform lag.
       var text = '';
       if (c != null) {
         try {
@@ -259,6 +309,9 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     _listenSession = false;
     if (!mounted) return;
 
+    final started = _listenStartedAt;
+    _listenStartedAt = null;
+
     final said = (preferredText != null && preferredText.isNotEmpty)
         ? preferredText
         : _rollupTranscript();
@@ -269,7 +322,9 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     });
 
     if (said.isEmpty) {
-      if (mounted) {
+      final quickEmpty = started != null &&
+          DateTime.now().difference(started) < const Duration(milliseconds: 1600);
+      if (mounted && !quickEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("I didn't catch that — tap the mic and try again! 🎤"),
@@ -283,7 +338,6 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
     await _sendUserLine(said);
   }
 
-  /// Best effort after silence-stop or timeout — uses partials + plugin buffer.
   String _rollupTranscript() {
     final live = _liveTranscript.trim();
     if (live.isNotEmpty) return live;
@@ -368,6 +422,7 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
       _manualStopInProgress = false;
       _finalWordsCompleter = null;
       _submitting = false;
+      _listenStartedAt = null;
     });
     _resetChatService();
     _scrollToBottom();
@@ -481,7 +536,6 @@ class _TalkSparkPanelState extends State<TalkSparkPanel>
             ],
           ),
         ),
-        // Pinned controls: always visible, bounded height (no Column overflow).
         Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 16, 4 + bottomInset),
           child: Column(

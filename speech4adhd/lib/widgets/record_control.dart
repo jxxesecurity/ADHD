@@ -52,6 +52,7 @@ class _RecordControlState extends State<RecordControl>
       height: box,
       child: Center(
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: widget.onPressed,
           child: AnimatedBuilder(
             animation: _pulse,

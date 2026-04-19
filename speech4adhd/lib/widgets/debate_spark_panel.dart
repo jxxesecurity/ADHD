@@ -43,6 +43,7 @@ class _DebateSparkPanelState extends State<DebateSparkPanel> {
   bool _manualStopInProgress = false;
   Completer<String>? _finalWordsCompleter;
   bool _submitting = false;
+  DateTime? _listenStartedAt;
 
   int _secondsLeft = _maxSeconds;
   Timer? _listenTimer;
@@ -62,9 +63,18 @@ class _DebateSparkPanelState extends State<DebateSparkPanel> {
     final ok = await _speech.initialize(
       onError: (e) {
         if (!mounted) return;
+        final raw = e.errorMsg.trim();
+        if (raw.isEmpty) return;
+        final m = raw.toLowerCase();
+        if (m.contains('no_match') ||
+            m.contains('error_speech_timeout') ||
+            m.contains('error_listen_failed') ||
+            m.contains('error_busy')) {
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Speech helper hiccup: ${e.errorMsg}'),
+            content: Text('Speech helper hiccup: $raw'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -74,6 +84,22 @@ class _DebateSparkPanelState extends State<DebateSparkPanel> {
         if (status == 'notListening' || status == 'done') {
           Future<void>.delayed(const Duration(milliseconds: 400), () {
             if (!mounted || !_listenSession || _manualStopInProgress) return;
+
+            final started = _listenStartedAt;
+            final elapsed = started != null
+                ? DateTime.now().difference(started)
+                : Duration.zero;
+            const minAutoFinalize = Duration(milliseconds: 2800);
+            if (elapsed < minAutoFinalize) {
+              if (_rollupTranscript().trim().isNotEmpty) {
+                unawaited(_onListenEnded());
+              }
+              return;
+            }
+
+            if (_speech.isListening) {
+              return;
+            }
             unawaited(_onListenEnded());
           });
         }
@@ -190,6 +216,9 @@ class _DebateSparkPanelState extends State<DebateSparkPanel> {
     });
     _finalWordsCompleter = null;
 
+    await _voice.stop();
+    _listenStartedAt = DateTime.now();
+
     await _speech.listen(
       onResult: (r) {
         if (!mounted) return;
@@ -207,14 +236,15 @@ class _DebateSparkPanelState extends State<DebateSparkPanel> {
         }
       },
       listenFor: const Duration(seconds: 90),
-      pauseFor: const Duration(seconds: 7),
+      pauseFor: const Duration(seconds: 12),
       listenOptions: SpeechListenOptions(
         partialResults: true,
-        cancelOnError: true,
+        cancelOnError: false,
         listenMode: ListenMode.dictation,
       ),
     );
-    if (mounted) _startListenTimer();
+    if (!mounted) return;
+    _startListenTimer();
   }
 
   Future<void> _stopListeningManually() async {
@@ -248,6 +278,7 @@ class _DebateSparkPanelState extends State<DebateSparkPanel> {
   Future<void> _onListenEnded({String? preferredText}) async {
     if (!_listenSession || _submitting) return;
     _listenSession = false;
+    _listenStartedAt = null;
     if (!mounted) return;
 
     final said = (preferredText != null && preferredText.isNotEmpty)
